@@ -22,10 +22,10 @@ model.eval()
 idx = 100
 sample = torch.FloatTensor(X_test[idx:idx+1])
 
-masked_sample, mask = mask_input(sample, mask_ratio=0.4, mask_token=model.decoder.mask_token)
+masked_sample, mask = mask_input(sample, mask_ratio=0.4, mask_token=model.mask_token)
 
 with torch.no_grad():
-    reconstructed = model(masked_sample)
+    reconstructed, _ = model(masked_sample)
 
 plt.figure(figsize=(12, 6))
 orig = sample[0, 0].detach().numpy()

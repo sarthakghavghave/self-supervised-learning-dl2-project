@@ -11,9 +11,11 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 RAW_DIR = PROJECT_ROOT / "dataset/raw"
 PROCESSED_DIR = PROJECT_ROOT / "dataset/processed"
 MODEL_DIR = PROJECT_ROOT / "models"
+FIGURE_DIR = PROJECT_ROOT / "figures"
 
 PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
 MODEL_DIR.mkdir(parents=True, exist_ok=True)
+FIGURE_DIR.mkdir(parents=True, exist_ok=True)
 
 ACTIVITY_NAMES = {
     0: "Stand",       1: "Sit",          2: "Talk-sit",
@@ -69,7 +71,15 @@ def make_loader(X, y=None, batch_size=128, shuffle=False):
 def sample_labels(X, y, fraction, random_state=42):
     if fraction >= 1.0:
         return X, y
+    
+    n_total = len(X)
+    n_samples = max(1, int(n_total * fraction))
+    n_classes = len(np.unique(y))
+    
+    # Stratification requires n_samples >= n_classes
+    stratify_param = y if n_samples >= n_classes else None
+    
     _, X_f, _, y_f = train_test_split(
-        X, y, test_size=fraction, stratify=y, random_state=random_state
+        X, y, test_size=n_samples, stratify=stratify_param, random_state=random_state
     )
     return X_f, y_f

@@ -1,0 +1,93 @@
+digraph HAR_Architecture {
+    fontname="Helvetica,Arial,sans-serif"
+    rankdir=TB;
+    nodesep=1.2;
+    ranksep=0.8;
+    splines=line; // Use straight lines
+
+    node [fontname="Helvetica,Arial,sans-serif", shape=box, style="filled,rounded", fillcolor="#f8f9fa", color="#333333", width=2.5, height=0.6, fontsize=11]
+    edge [fontname="Helvetica,Arial,sans-serif", color="#555555", penwidth=1.0, arrowsize=0.7]
+
+    // 1. Data Source
+    subgraph cluster_data {
+        label = "1. Data Preprocessing Pipeline";
+        style = "dashed,rounded";
+        color = "#999999";
+        
+        raw_data [label="Multimodal Sensor Streams\n(Accel + Gyro)", shape=cylinder, fillcolor="#E3F2FD"];
+        windowing [label="Sliding Window Segmentation\n(Window=300, 6 Channels)"];
+        
+        raw_data -> windowing;
+    }
+
+    // Parallel Split
+    split_node [shape=point, width=0, height=0];
+    windowing -> split_node [dir=none];
+
+    // 2. Parallel SSL Phase
+    subgraph cluster_ssl {
+        label = "2. Self-Supervised Learning Phase (Parallel Pre-training)";
+        style = "filled,rounded";
+        fillcolor = "#F9FBE7";
+        color = "#AFB42B";
+
+        // AE Branch (Left)
+        subgraph cluster_ae {
+            label = "Autoencoder (AE)";
+            style = "solid,rounded";
+            color = "#1976D2";
+            fillcolor = "#E3F2FD";
+            
+            ae_input [label="Full Input Sequence"];
+            ae_encoder [label="Hybrid Encoder\n(CNN + Bi-LSTM)", fillcolor="#C8E6C9"];
+            ae_decoder [label="Hybrid Decoder\n(Bi-LSTM + Deconv)"];
+            ae_recon [label="Full Sequence Reconstruction", shape=parallelogram];
+            
+            ae_input -> ae_encoder -> ae_decoder -> ae_recon;
+        }
+
+        // MAE Branch (Right)
+        subgraph cluster_mae {
+            label = "Masked Autoencoder (MAE)";
+            style = "solid,rounded";
+            color = "#E64A19";
+            fillcolor = "#FFEBEE";
+            
+            mae_masking [label="Patch Masking (50% Ratio)", fillcolor="#FFF9C4"];
+            mae_encoder [label="Hybrid Encoder\n(Shared Architecture)", fillcolor="#C8E6C9"];
+            mae_decoder [label="Hybrid Decoder\n(MAE Specific)"];
+            mae_recon [label="Masked Patch Reconstruction", shape=parallelogram];
+            
+            mae_masking -> mae_encoder -> mae_decoder -> mae_recon;
+        }
+    }
+
+    // 3. Transfer Learning Phase
+    subgraph cluster_transfer {
+        label = "3. Downstream Transfer Learning";
+        style = "filled,rounded";
+        fillcolor = "#E1F5FE";
+        color = "#0288D1";
+
+        classifier_input [label="Labeled Activity Sequence"];
+        pretrained_encoder [label="Pre-trained Feature Extractor\n(MAE Initialized Weights)", style="filled,bold", color="#2E7D32", fillcolor="#FFFFFF"];
+        pool_head [label="Global Stats Pooling\n(Mean + Max)"];
+        mlp_head [label="MLP Classification Head\n(18 Activity Classes)"];
+        final_output [label="Final Activity Prediction", shape=doubleoctagon, fillcolor="#B3E5FC"];
+
+        classifier_input -> pretrained_encoder -> pool_head -> mlp_head -> final_output;
+    }
+
+    // Connections from Split
+    split_node -> ae_input;
+    split_node -> mae_masking;
+    split_node -> classifier_input;
+
+    // Weight Transfer
+    mae_encoder -> pretrained_encoder [style=dashed, constraint=false, color="#2E7D32", penwidth=2.0, label=" Weights Transfer "];
+
+    // Align the branches
+    {rank=same; ae_input; mae_masking; classifier_input}
+    {rank=same; ae_encoder; mae_encoder}
+    {rank=same; ae_recon; mae_recon}
+}

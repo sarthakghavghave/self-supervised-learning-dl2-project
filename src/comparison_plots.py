@@ -9,6 +9,7 @@ import torch
 import random
 import matplotlib.pyplot as plt
 from sklearn.metrics import accuracy_score, f1_score
+from sklearn.model_selection import train_test_split
 from scripts.load import PROCESSED_DIR, MODEL_DIR, make_loader, sample_labels
 from src.models import Encoder, BaselineCNN
 from scripts.train_cls import train_classifier, train_baseline
@@ -51,18 +52,25 @@ device = "cpu"
 
 for frac in fractions:
     print(f"\n{'='*40}")
-    print(f" EXPERIMENT: {frac*100:g}% of Labeled Pool (n={int(len(X_val)*frac)})")
+    print(f" EXPERIMENT: {frac*100:g}% of Labeled Pool")
     print(f"{'='*40}")
 
-    X_small, y_small = sample_labels(X_val, y_val, fraction=frac)    
-    train_loader_small = make_loader(X_small, y_small, batch_size=128, shuffle=True)
+    X_pool_train, X_pool_val, y_pool_train, y_pool_val = train_test_split(
+        X_val, y_val, test_size=0.2, stratify=y_val, random_state=42
+    )
 
-    epochs = 30 if frac <= 0.05 else 25 if frac <= 0.1 else 20
-    print(f"Training for {epochs} epochs...")
+    X_small, y_small = sample_labels(X_pool_train, y_pool_train, fraction=frac)    
+    train_loader_small = make_loader(X_small, y_small, batch_size=128, shuffle=True)
+    val_loader_small = make_loader(X_pool_val, y_pool_val, batch_size=128)
+
+    epochs = 100
+    patience = 15
+    freeze = 10 if frac <= 0.1 else 5
+    print(f"Training for {epochs} epochs (Freeze={freeze}, Patience={patience})...")
 
     print("\nTraining BaselineCNN...")
     model_baseline = BaselineCNN().to(device)
-    model_baseline, _, _, _ = train_baseline(model_baseline, train_loader_small, test_loader, epochs=epochs, device=device)
+    model_baseline, _, _, _ = train_baseline(model_baseline, train_loader_small, val_loader_small, epochs=epochs, patience=patience, device=device)
     acc, f1 = evaluate(model_baseline, test_loader, device=device)
     results['BaselineCNN']['acc'].append(acc)
     results['BaselineCNN']['f1'].append(f1)
@@ -70,7 +78,7 @@ for frac in fractions:
     print("\nTraining AE Classifier...")
     encoder_ae = Encoder()
     encoder_ae.load_state_dict(torch.load(MODEL_DIR / "encoder_ae.pth", weights_only=True))
-    model_ae, _, _, _ = train_classifier(encoder_ae, train_loader_small, test_loader, epochs=epochs, device=device)
+    model_ae, _, _, _ = train_classifier(encoder_ae, train_loader_small, val_loader_small, epochs=epochs, freeze_epochs=freeze, patience=patience, device=device)
     acc, f1 = evaluate(model_ae, test_loader, device=device)
     results['AE']['acc'].append(acc)
     results['AE']['f1'].append(f1)
@@ -78,7 +86,7 @@ for frac in fractions:
     print("\nTraining MAE Classifier...")
     encoder_mae = Encoder()
     encoder_mae.load_state_dict(torch.load(MODEL_DIR / "encoder_mae.pth", weights_only=True))
-    model_mae, _, _, _ = train_classifier(encoder_mae, train_loader_small, test_loader, epochs=epochs, device=device)
+    model_mae, _, _, _ = train_classifier(encoder_mae, train_loader_small, val_loader_small, epochs=epochs, freeze_epochs=freeze, patience=patience, device=device)
     acc, f1 = evaluate(model_mae, test_loader, device=device)
     results['MAE']['acc'].append(acc)
     results['MAE']['f1'].append(f1)
