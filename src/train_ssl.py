@@ -1,14 +1,17 @@
 import torch
 import copy
 import torch.nn as nn
-from src.models import AutoEncoder
+from models import AutoEncoder
 
-def mask_input(X, mask_ratio=0.3, patch_size=10):
+def mask_input(X, mask_ratio=0.3, patch_size=10, mask_token=None):
     B, C, L = X.shape
     if L % patch_size != 0:
         mask = torch.rand_like(X) < mask_ratio
         X_masked = X.clone()
-        X_masked[mask] = 0
+        if mask_token is not None:
+            X_masked[mask] = mask_token.unsqueeze(-1).expand(-1, -1, L)[mask]
+        else:
+            X_masked[mask] = 0
         return X_masked, mask
 
     num_patches = L // patch_size
@@ -17,11 +20,17 @@ def mask_input(X, mask_ratio=0.3, patch_size=10):
     mask = mask.reshape(B, 1, L).expand(-1, C, -1)
     
     X_masked = X.clone()
-    X_masked[mask] = 0
+    if mask_token is not None:
+        mask_token_expanded = mask_token.unsqueeze(0).unsqueeze(-1).expand(B, -1, -1, num_patches)
+        mask_token_expanded = mask_token_expanded.reshape(B, C, L)
+        X_masked[mask] = mask_token_expanded[mask]
+    else:
+        X_masked[mask] = 0
     return X_masked, mask
 
 def train_autoencoder(loader, epochs=10, lr=1e-3, device="cpu", masked=False, mask_ratio=0.3):
     model = AutoEncoder().to(device)
+    mask_token = model.decoder.mask_token if masked else None
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     criterion = nn.MSELoss(reduction='none')
@@ -37,7 +46,7 @@ def train_autoencoder(loader, epochs=10, lr=1e-3, device="cpu", masked=False, ma
             X = X.to(device)
             
             if masked:
-                X_input, mask = mask_input(X, mask_ratio)
+                X_input, mask = mask_input(X, mask_ratio, mask_token=mask_token)
             else:
                 X_input = X
                 mask = torch.ones_like(X, dtype=torch.bool)
@@ -61,4 +70,20 @@ def train_autoencoder(loader, epochs=10, lr=1e-3, device="cpu", masked=False, ma
 
     model.load_state_dict(best_state)
 
-    return model.encoder
+    return model
+
+def evaluate_reconstruction(model, loader, device="cpu"):
+    model.eval()
+    total_mse = 0
+    count = 0
+    
+    with torch.no_grad():
+        for X in loader:
+            X = X.to(device)
+            X_hat = model(X)
+            mse = nn.functional.mse_loss(X_hat, X, reduction='sum')
+            total_mse += mse.item()
+            count += X.numel()
+    
+    avg_mse = total_mse / count
+    return avg_mse
