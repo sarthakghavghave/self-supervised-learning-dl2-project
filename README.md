@@ -31,7 +31,30 @@ This project investigates:
 
 ---
 
-## Current Approach (Initial Phase)
+## Project Structure
+
+```
+project/
+│
+├── dataset/
+│   ├── raw/
+│   └── processed/
+│
+├── models/
+│
+├── src/
+│   └── load.py     # data loading & preprocessing
+│
+├── notebooks/
+|   ├── 01_data_preprocessing.ipynb
+│   └── 02_baseline_cnn.ipynb
+│
+└── README.md
+```
+
+---
+
+## Approach
 
 ### 1. Baseline Model
 
@@ -41,6 +64,7 @@ This project investigates:
 ### 2. Self-Supervised Learning
 
 * Autoencoder to reconstruct input signals
+* Masked Autoencoder for improved learning
 
 ### 3. Transfer Learning
 

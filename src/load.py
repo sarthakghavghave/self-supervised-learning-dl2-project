@@ -1,5 +1,6 @@
 import torch
 from torch.utils.data import Dataset, DataLoader
+from sklearn.model_selection import train_test_split
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -26,3 +27,11 @@ class HARDataset(Dataset):
 def make_loader(X, y=None, batch_size=128, shuffle=False):
     ds = HARDataset(X, y)
     return DataLoader(ds, batch_size=batch_size, shuffle=shuffle, num_workers=0)
+
+def sample_labels(X, y, fraction, random_state=42):
+    if fraction >= 1.0:
+        return X, y
+    _, X_f, _, y_f = train_test_split(
+        X, y, test_size=fraction, stratify=y, random_state=random_state
+    )
+    return X_f, y_f
